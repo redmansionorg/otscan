@@ -1,0 +1,23 @@
+# Go build output (root binary only)
+/otscan
+/bin/
+
+# Frontend build artifacts
+web/node_modules/
+web/dist/
+
+# Local config (contains passwords)
+config.yaml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes / runtime
+*.log

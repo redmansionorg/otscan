@@ -1,0 +1,58 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: otscan
+      POSTGRES_PASSWORD: otscan_pass
+      POSTGRES_DB: otscan
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    networks:
+      - otscan-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U otscan"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redisdata:/data
+    networks:
+      - otscan-internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  otscan:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./config.docker.yaml:/app/config.yaml:ro
+    networks:
+      - otscan-internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  otscan-internal:
+    driver: bridge
+    internal: false  # otscan needs to reach host RPC nodes
+
+volumes:
+  pgdata:
+  redisdata:

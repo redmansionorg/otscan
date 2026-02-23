@@ -1,0 +1,37 @@
+server:
+  host: "0.0.0.0"
+  port: 3000
+  mode: "release"
+
+chain:
+  id: 192
+  name: "RMC"
+  breatheBlockInterval: 3600
+
+nodes:
+  - name: "node0"
+    rpcUrl: "http://host.docker.internal:8545"
+  - name: "node1"
+    rpcUrl: "http://host.docker.internal:8547"
+  - name: "node2"
+    rpcUrl: "http://host.docker.internal:8549"
+  - name: "node3"
+    rpcUrl: "http://host.docker.internal:8551"
+  - name: "node4"
+    rpcUrl: "http://host.docker.internal:8553"
+
+database:
+  host: "postgres"
+  port: 5432
+  user: "otscan"
+  password: "otscan_pass"
+  dbname: "otscan"
+
+redis:
+  addr: "redis:6379"
+  nodeStatusTTL: "30s"
+
+indexer:
+  nodePollingInterval: "10s"
+  batchSyncInterval: "30s"
+  claimSyncInterval: "30s"
