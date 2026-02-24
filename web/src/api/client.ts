@@ -29,6 +29,7 @@ export interface NodeStatus {
   lastProcessedBlock: number;
   components?: Record<string, { healthy: boolean; message?: string }>;
   lastAnchor?: string;
+  coinbase?: string;
 }
 
 export interface DashboardData {
@@ -55,6 +56,7 @@ export interface BatchSummary {
   status: string;
   anchoredBy?: string;
   anchorBlock?: number;
+  anchoredByName?: string;
 }
 
 export interface BatchDetail {
@@ -73,6 +75,7 @@ export interface BatchDetail {
   btcTimestamp?: number;
   anchoredBy?: string;
   anchorBlock?: number;
+  anchoredByName?: string;
 }
 
 export interface RUIDsData {
@@ -120,6 +123,8 @@ export interface VerifyData {
   merkleProof?: string;
   otsProof?: string;
   parsedOTSProof?: ParsedOTSProof;
+  leafIndex?: number;
+  leafCount?: number;
 }
 
 export interface OTSProofData {

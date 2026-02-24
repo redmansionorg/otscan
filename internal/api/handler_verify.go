@@ -54,6 +54,8 @@ type VerifyResponse struct {
 	MerkleProof    string          `json:"merkleProof,omitempty"`
 	OTSProof       string          `json:"otsProof,omitempty"`
 	ParsedOTSProof *ParsedOTSProof `json:"parsedOTSProof,omitempty"`
+	LeafIndex      *uint32         `json:"leafIndex,omitempty"`
+	LeafCount      uint32          `json:"leafCount,omitempty"`
 }
 
 func (s *Server) handleVerify(c *gin.Context) {
@@ -102,6 +104,9 @@ func (s *Server) handleVerify(c *gin.Context) {
 			resp.RootHash = proof.RootHash
 			resp.MerkleProof = proof.MerkleProof
 			resp.OTSProof = proof.OTSProof
+			leafIdx := proof.LeafIndex
+			resp.LeafIndex = &leafIdx
+			resp.LeafCount = proof.LeafCount
 
 			// Parse OTS proof into structured form
 			if proof.OTSProof != "" {

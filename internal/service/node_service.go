@@ -33,6 +33,7 @@ type NodeStatusView struct {
 	LastProcessedBlock uint64                 `json:"lastProcessedBlock"`
 	Components         map[string]interface{} `json:"components,omitempty"`
 	LastAnchor         *string                `json:"lastAnchor,omitempty"`
+	Coinbase           string                 `json:"coinbase,omitempty"`
 }
 
 // GetAllNodes tries: Redis cache → DB → RPC fallback
@@ -53,6 +54,7 @@ func (s *NodeService) GetAllNodes(ctx context.Context) ([]NodeStatusView, error)
 				PendingCount: c.PendingCount, TotalCreated: c.TotalCreated,
 				TotalConfirmed: c.TotalConfirmed, LastProcessedBlock: c.LastProcessedBlock,
 				Components: c.Components, LastAnchor: c.LastAnchor,
+				Coinbase: c.Coinbase,
 			}
 		}
 		return views, nil
@@ -69,6 +71,7 @@ func (s *NodeService) GetAllNodes(ctx context.Context) ([]NodeStatusView, error)
 				PendingCount: n.PendingCount, TotalCreated: n.TotalCreated,
 				TotalConfirmed: n.TotalConfirmed, LastProcessedBlock: n.LastProcessedBlock,
 				Components: n.Components, LastAnchor: n.LastAnchor,
+				Coinbase: n.Coinbase,
 			}
 		}
 		return views, nil
@@ -88,6 +91,7 @@ func (s *NodeService) GetNode(ctx context.Context, name string) (*NodeStatusView
 			PendingCount: cached.PendingCount, TotalCreated: cached.TotalCreated,
 			TotalConfirmed: cached.TotalConfirmed, LastProcessedBlock: cached.LastProcessedBlock,
 			Components: cached.Components, LastAnchor: cached.LastAnchor,
+			Coinbase: cached.Coinbase,
 		}, nil
 	}
 
@@ -99,6 +103,7 @@ func (s *NodeService) GetNode(ctx context.Context, name string) (*NodeStatusView
 			PendingCount: dbNode.PendingCount, TotalCreated: dbNode.TotalCreated,
 			TotalConfirmed: dbNode.TotalConfirmed, LastProcessedBlock: dbNode.LastProcessedBlock,
 			Components: dbNode.Components, LastAnchor: dbNode.LastAnchor,
+			Coinbase: dbNode.Coinbase,
 		}, nil
 	}
 

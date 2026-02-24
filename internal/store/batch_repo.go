@@ -24,6 +24,7 @@ type BatchRecord struct {
 	UpdatedAt      time.Time `json:"updatedAt"`
 	AnchoredBy     string    `json:"anchoredBy,omitempty"`
 	AnchorBlock    uint64    `json:"anchorBlock"`
+	AnchoredByName string    `json:"anchoredByName,omitempty"` // not persisted, populated by service layer
 }
 
 // UpsertBatch inserts or updates a batch record.

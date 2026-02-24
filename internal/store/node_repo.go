@@ -21,19 +21,20 @@ type NodeRecord struct {
 }
 
 type NodeStatusRecord struct {
-	NodeID             int               `json:"nodeId"`
-	NodeName           string            `json:"nodeName"`
-	RPCURL             string            `json:"rpcUrl"`
-	Status             string            `json:"status"`
-	BlockNumber        uint64            `json:"blockNumber"`
-	OTSMode            string            `json:"otsMode"`
-	PendingCount       int               `json:"pendingCount"`
-	TotalCreated       int               `json:"totalCreated"`
-	TotalConfirmed     int               `json:"totalConfirmed"`
-	LastProcessedBlock uint64            `json:"lastProcessedBlock"`
+	NodeID             int                    `json:"nodeId"`
+	NodeName           string                 `json:"nodeName"`
+	RPCURL             string                 `json:"rpcUrl"`
+	Status             string                 `json:"status"`
+	BlockNumber        uint64                 `json:"blockNumber"`
+	OTSMode            string                 `json:"otsMode"`
+	PendingCount       int                    `json:"pendingCount"`
+	TotalCreated       int                    `json:"totalCreated"`
+	TotalConfirmed     int                    `json:"totalConfirmed"`
+	LastProcessedBlock uint64                 `json:"lastProcessedBlock"`
 	Components         map[string]interface{} `json:"components,omitempty"`
-	LastAnchor         *string           `json:"lastAnchor,omitempty"`
-	PolledAt           time.Time         `json:"polledAt"`
+	LastAnchor         *string                `json:"lastAnchor,omitempty"`
+	Coinbase           string                 `json:"coinbase,omitempty"`
+	PolledAt           time.Time              `json:"polledAt"`
 }
 
 // UpsertNode creates or updates a node record.
@@ -50,20 +51,20 @@ func (db *DB) UpsertNode(ctx context.Context, name, rpcURL string) (int, error) 
 // UpsertNodeStatus inserts or updates current node status.
 func (db *DB) UpsertNodeStatus(ctx context.Context, nodeID int, status string, blockNumber uint64,
 	otsMode string, pendingCount, totalCreated, totalConfirmed int,
-	lastProcessedBlock uint64, components map[string]interface{}, lastAnchor *string) error {
+	lastProcessedBlock uint64, components map[string]interface{}, lastAnchor *string, coinbase string) error {
 
 	compJSON, _ := json.Marshal(components)
 
 	_, err := db.Pool.Exec(ctx, `
 		INSERT INTO node_status (node_id, status, block_number, ots_mode, pending_count,
-			total_created, total_confirmed, last_processed_block, components, last_anchor, polled_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+			total_created, total_confirmed, last_processed_block, components, last_anchor, coinbase, polled_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
 		ON CONFLICT (node_id) DO UPDATE SET
 			status = $2, block_number = $3, ots_mode = $4, pending_count = $5,
 			total_created = $6, total_confirmed = $7, last_processed_block = $8,
-			components = $9, last_anchor = $10, polled_at = NOW()
+			components = $9, last_anchor = $10, coinbase = $11, polled_at = NOW()
 	`, nodeID, status, blockNumber, otsMode, pendingCount, totalCreated, totalConfirmed,
-		lastProcessedBlock, compJSON, lastAnchor)
+		lastProcessedBlock, compJSON, lastAnchor, coinbase)
 	return err
 }
 
@@ -84,7 +85,7 @@ func (db *DB) GetAllNodeStatus(ctx context.Context) ([]NodeStatusRecord, error) 
 			COALESCE(ns.ots_mode, ''), COALESCE(ns.pending_count, 0),
 			COALESCE(ns.total_created, 0), COALESCE(ns.total_confirmed, 0),
 			COALESCE(ns.last_processed_block, 0), ns.components, ns.last_anchor,
-			COALESCE(ns.polled_at, NOW())
+			COALESCE(ns.coinbase, ''), COALESCE(ns.polled_at, NOW())
 		FROM nodes n
 		LEFT JOIN node_status ns ON ns.node_id = n.id
 		WHERE n.is_active = true
@@ -102,7 +103,7 @@ func (db *DB) GetAllNodeStatus(ctx context.Context) ([]NodeStatusRecord, error) 
 		err := rows.Scan(&r.NodeID, &r.NodeName, &r.RPCURL,
 			&r.Status, &r.BlockNumber, &r.OTSMode, &r.PendingCount,
 			&r.TotalCreated, &r.TotalConfirmed, &r.LastProcessedBlock,
-			&compJSON, &r.LastAnchor, &r.PolledAt)
+			&compJSON, &r.LastAnchor, &r.Coinbase, &r.PolledAt)
 		if err != nil {
 			return nil, err
 		}
@@ -124,14 +125,14 @@ func (db *DB) GetNodeStatus(ctx context.Context, name string) (*NodeStatusRecord
 			COALESCE(ns.ots_mode, ''), COALESCE(ns.pending_count, 0),
 			COALESCE(ns.total_created, 0), COALESCE(ns.total_confirmed, 0),
 			COALESCE(ns.last_processed_block, 0), ns.components, ns.last_anchor,
-			COALESCE(ns.polled_at, NOW())
+			COALESCE(ns.coinbase, ''), COALESCE(ns.polled_at, NOW())
 		FROM nodes n
 		LEFT JOIN node_status ns ON ns.node_id = n.id
 		WHERE n.name = $1 AND n.is_active = true
 	`, name).Scan(&r.NodeID, &r.NodeName, &r.RPCURL,
 		&r.Status, &r.BlockNumber, &r.OTSMode, &r.PendingCount,
 		&r.TotalCreated, &r.TotalConfirmed, &r.LastProcessedBlock,
-		&compJSON, &r.LastAnchor, &r.PolledAt)
+		&compJSON, &r.LastAnchor, &r.Coinbase, &r.PolledAt)
 	if err != nil {
 		return nil, err
 	}
@@ -139,6 +140,29 @@ func (db *DB) GetNodeStatus(ctx context.Context, name string) (*NodeStatusRecord
 		json.Unmarshal(compJSON, &r.Components)
 	}
 	return r, nil
+}
+
+// GetAddressNodeMap returns a mapping from coinbase address (lowercased) to node name.
+func (db *DB) GetAddressNodeMap(ctx context.Context) (map[string]string, error) {
+	rows, err := db.Pool.Query(ctx, `
+		SELECT n.name, COALESCE(LOWER(ns.coinbase), '')
+		FROM nodes n
+		LEFT JOIN node_status ns ON ns.node_id = n.id
+		WHERE n.is_active = true AND ns.coinbase IS NOT NULL AND ns.coinbase != ''
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	m := make(map[string]string)
+	for rows.Next() {
+		var name, addr string
+		if err := rows.Scan(&name, &addr); err == nil && addr != "" {
+			m[addr] = name
+		}
+	}
+	return m, nil
 }
 
 // GetNodeHistory returns recent status history for a node (for trend charts).

@@ -4,6 +4,8 @@ WORKDIR /app/web
 COPY web/package.json web/package-lock.json* ./
 RUN npm install
 COPY web/ ./
+ARG VITE_PUBLIC_URL=""
+ENV VITE_PUBLIC_URL=${VITE_PUBLIC_URL}
 RUN npm run build
 
 # Stage 2: Build Go binary

@@ -90,6 +90,7 @@ export default function BatchDetail() {
         </DetailRow>
         {batch.anchoredBy && (
           <DetailRow label="Anchored By">
+            {batch.anchoredByName && <span style={{ marginRight: 8, fontWeight: 500 }}>{batch.anchoredByName}</span>}
             <Text code copyable style={{ fontSize: 12 }}>{batch.anchoredBy}</Text>
           </DetailRow>
         )}

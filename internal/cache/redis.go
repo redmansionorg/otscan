@@ -52,6 +52,7 @@ type CachedNodeStatus struct {
 	LastProcessedBlock uint64                 `json:"lastProcessedBlock"`
 	Components         map[string]interface{} `json:"components,omitempty"`
 	LastAnchor         *string                `json:"lastAnchor,omitempty"`
+	Coinbase           string                 `json:"coinbase,omitempty"`
 	UpdatedAt          time.Time              `json:"updatedAt"`
 }
 

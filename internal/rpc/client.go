@@ -90,6 +90,18 @@ func (c *Client) EthBlockNumber(ctx context.Context, url string) (uint64, error)
 	return num, nil
 }
 
+func (c *Client) EthCoinbase(ctx context.Context, url string) (string, error) {
+	result, err := c.Call(ctx, url, "eth_coinbase")
+	if err != nil {
+		return "", err
+	}
+	var addr string
+	if err := json.Unmarshal(result, &addr); err != nil {
+		return "", err
+	}
+	return addr, nil
+}
+
 func (c *Client) OTSStatus(ctx context.Context, url string) (*StatusResult, error) {
 	result, err := c.Call(ctx, url, "ots_status")
 	if err != nil {

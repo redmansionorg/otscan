@@ -78,6 +78,7 @@ type BatchResult struct {
 	CalendarServer string `json:"calendarServer,omitempty"`
 	AnchoredBy     string `json:"anchoredBy,omitempty"`
 	AnchorBlock    uint64 `json:"anchorBlock,omitempty"`
+	AnchoredByName string `json:"anchoredByName,omitempty"`
 }
 
 type BatchSummary struct {
@@ -109,6 +110,8 @@ type ProofResult struct {
 	RootHash    string `json:"rootHash"`
 	MerkleProof string `json:"merkleProof,omitempty"`
 	OTSProof    string `json:"otsProof,omitempty"`
+	LeafIndex   uint32 `json:"leafIndex"`
+	LeafCount   uint32 `json:"leafCount"`
 }
 
 type VerifyResult struct {

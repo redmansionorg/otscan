@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/workshop1/otscan/internal/config"
 	"github.com/workshop1/otscan/internal/rpc"
@@ -45,6 +46,7 @@ func (s *BatchService) ListBatches(ctx context.Context, status string, page, pag
 	batches, total, err := s.db.ListBatches(ctx, status, pageSize, offset, filter...)
 	if err == nil && (total > 0 || f != "") {
 		// When a filter is active, 0 results is a valid outcome (e.g. no empty batches).
+		s.enrichAnchoredByName(ctx, batches)
 		return &BatchListResponse{Batches: batches, Total: total, Page: page, PageSize: pageSize}, nil
 	}
 
@@ -57,7 +59,7 @@ func (s *BatchService) GetBatch(ctx context.Context, id string) (*rpc.BatchResul
 	// Try DB first
 	dbBatch, err := s.db.GetBatch(ctx, id)
 	if err == nil {
-		return &rpc.BatchResult{
+		result := &rpc.BatchResult{
 			BatchID:        dbBatch.BatchID,
 			OnChainID:      uint64(dbBatch.OnChainID),
 			StartBlock:     dbBatch.StartBlock,
@@ -73,7 +75,9 @@ func (s *BatchService) GetBatch(ctx context.Context, id string) (*rpc.BatchResul
 			CreatedAt:      dbBatch.CreatedAt,
 			AnchoredBy:     dbBatch.AnchoredBy,
 			AnchorBlock:    dbBatch.AnchorBlock,
-		}, nil
+			AnchoredByName: s.lookupAnchoredByName(ctx, dbBatch.AnchoredBy),
+		}
+		return result, nil
 	}
 
 	// RPC fallback
@@ -95,6 +99,33 @@ func (s *BatchService) GetBatchRUIDs(ctx context.Context, batchID string, offset
 
 	// RPC fallback
 	return s.rpcClient.GetRUIDs(ctx, s.pickNode(), batchID, uint32(offset), uint32(limit))
+}
+
+// enrichAnchoredByName populates AnchoredByName for batches that have AnchoredBy set.
+func (s *BatchService) enrichAnchoredByName(ctx context.Context, batches []store.BatchRecord) {
+	addrMap, err := s.db.GetAddressNodeMap(ctx)
+	if err != nil || len(addrMap) == 0 {
+		return
+	}
+	for i := range batches {
+		if batches[i].AnchoredBy != "" {
+			if name, ok := addrMap[strings.ToLower(batches[i].AnchoredBy)]; ok {
+				batches[i].AnchoredByName = name
+			}
+		}
+	}
+}
+
+// lookupAnchoredByName returns the node name for an address, or empty string.
+func (s *BatchService) lookupAnchoredByName(ctx context.Context, addr string) string {
+	if addr == "" {
+		return ""
+	}
+	addrMap, err := s.db.GetAddressNodeMap(ctx)
+	if err != nil {
+		return ""
+	}
+	return addrMap[strings.ToLower(addr)]
 }
 
 func (s *BatchService) pickNode() string {

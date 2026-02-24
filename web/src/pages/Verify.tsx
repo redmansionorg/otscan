@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Card, Input, Result, Descriptions, Tag, Alert, Typography, Collapse, Steps } from 'antd';
+import { Button, Card, Input, Result, Descriptions, Tag, Alert, Typography, Collapse, Steps } from 'antd';
 import {
   SafetyCertificateOutlined, CheckCircleOutlined, CloseCircleOutlined,
   LinkOutlined, LockOutlined, AuditOutlined, ThunderboltOutlined,
-  CloudOutlined, PlusOutlined, ArrowRightOutlined,
+  CloudOutlined, PlusOutlined, ArrowRightOutlined, FilePdfOutlined,
 } from '@ant-design/icons';
 import { Link, useSearchParams } from 'react-router-dom';
 import { verifyRUID, type VerifyData, type ParsedOTSProof } from '../api/client';
@@ -135,6 +135,7 @@ export default function Verify() {
   const [searchParams] = useSearchParams();
   const [ruid, setRuid] = useState('');
   const [loading, setLoading] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [result, setResult] = useState<VerifyData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -152,6 +153,19 @@ export default function Verify() {
       setError(String(err));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleExportPDF = async () => {
+    if (!result) return;
+    setPdfLoading(true);
+    try {
+      const { generateCertificatePDF } = await import('../utils/generateCertificatePDF');
+      await generateCertificatePDF(result);
+    } catch (err) {
+      console.error('PDF generation failed:', err);
+    } finally {
+      setPdfLoading(false);
     }
   };
 
@@ -193,6 +207,19 @@ export default function Verify() {
               subTitle={result.message}
               style={{ padding: '16px 0' }}
             />
+            {result.verified && (
+              <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                <Button
+                  type="primary"
+                  icon={<FilePdfOutlined />}
+                  onClick={handleExportPDF}
+                  loading={pdfLoading}
+                  size="large"
+                >
+                  Export PDF Certificate
+                </Button>
+              </div>
+            )}
             <Descriptions bordered size="small" column={1}>
               <Descriptions.Item label="RUID">
                 <Text code copyable>{result.ruid}</Text>
@@ -228,6 +255,14 @@ export default function Verify() {
               {result.batchID && (
                 <Descriptions.Item label="Batch ID">
                   <Link to={`/batches/${result.batchID}`}>{result.batchID}</Link>
+                </Descriptions.Item>
+              )}
+              {result.leafCount !== undefined && result.leafCount > 0 && (
+                <Descriptions.Item label="Leaf Position">
+                  <Tag color="blue">#{result.leafIndex}</Tag>
+                  <Text type="secondary" style={{ marginLeft: 8 }}>
+                    of {result.leafCount} RUIDs (0 = earliest submitted)
+                  </Text>
                 </Descriptions.Item>
               )}
               {result.rootHash && (

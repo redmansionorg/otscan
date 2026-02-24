@@ -33,10 +33,16 @@ func (idx *Indexer) pollOneNode(ctx context.Context, name, url string) {
 	var lastProcessedBlock uint64
 	var components map[string]interface{}
 	var lastAnchor *string
+	var coinbase string
 
 	// Get block number
 	if bn, err := idx.rpcClient.EthBlockNumber(pollCtx, url); err == nil {
 		blockNum = bn
+	}
+
+	// Get coinbase (mining address)
+	if addr, err := idx.rpcClient.EthCoinbase(pollCtx, url); err == nil {
+		coinbase = addr
 	}
 
 	// Get OTS health
@@ -67,7 +73,7 @@ func (idx *Indexer) pollOneNode(ctx context.Context, name, url string) {
 	// Update DB
 	if err := idx.db.UpsertNodeStatus(pollCtx, nodeID, status, blockNum,
 		otsMode, pendingCount, totalCreated, totalConfirmed,
-		lastProcessedBlock, components, lastAnchor); err != nil {
+		lastProcessedBlock, components, lastAnchor, coinbase); err != nil {
 		log.Printf("[indexer] failed to update node status %s: %v", name, err)
 	}
 
@@ -87,6 +93,7 @@ func (idx *Indexer) pollOneNode(ctx context.Context, name, url string) {
 		LastProcessedBlock: lastProcessedBlock,
 		Components:         components,
 		LastAnchor:         lastAnchor,
+		Coinbase:           coinbase,
 		UpdatedAt:          time.Now(),
 	}
 	if err := idx.cache.SetNodeStatus(pollCtx, cached); err != nil {

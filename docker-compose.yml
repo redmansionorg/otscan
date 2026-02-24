@@ -32,7 +32,10 @@ services:
     restart: unless-stopped
 
   otscan:
-    build: .
+    build:
+      context: .
+      args:
+        VITE_PUBLIC_URL: ${VITE_PUBLIC_URL:-}
     ports:
       - "3000:3000"
     volumes:

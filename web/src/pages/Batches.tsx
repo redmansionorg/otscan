@@ -42,8 +42,14 @@ const columns = [
     render: (s: string) => <Tag color={statusColor[s] || 'default'}>{s}</Tag>,
   },
   {
-    title: 'Anchor Node', dataIndex: 'anchoredBy', key: 'anchoredBy', width: 140,
-    render: (v: string) => v ? <span title={v}>{shortAddr(v)}</span> : '-',
+    title: 'Anchor Node', key: 'anchoredBy', width: 180,
+    render: (_: unknown, r: BatchSummary) => {
+      if (!r.anchoredBy) return '-';
+      const label = r.anchoredByName
+        ? `${r.anchoredByName} (${shortAddr(r.anchoredBy)})`
+        : shortAddr(r.anchoredBy);
+      return <span title={r.anchoredBy}>{label}</span>;
+    },
   },
 ];
 

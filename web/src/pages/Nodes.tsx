@@ -24,6 +24,8 @@ const batchStatusTag = (s: string) => {
   return <Tag color={colorMap[s] || 'default'}>{s}</Tag>;
 };
 
+const shortAddr = (addr?: string) => addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : '-';
+
 const columns = [
   {
     title: 'Node', dataIndex: 'name', key: 'name', width: 100,
@@ -33,6 +35,10 @@ const columns = [
   },
   { title: 'Status', dataIndex: 'status', key: 'status', width: 100, render: statusTag },
   { title: 'Block', dataIndex: 'blockNumber', key: 'block', width: 100 },
+  {
+    title: 'Coinbase', dataIndex: 'coinbase', key: 'coinbase', width: 130,
+    render: (v: string) => v ? <span title={v}><Text copyable={{ text: v }} style={{ fontSize: 12 }}>{shortAddr(v)}</Text></span> : '-',
+  },
   { title: 'Mode', dataIndex: 'otsMode', key: 'mode', width: 80 },
   { title: 'Pending', dataIndex: 'pendingCount', key: 'pending', width: 80 },
   { title: 'Created', dataIndex: 'totalCreated', key: 'created', width: 80 },

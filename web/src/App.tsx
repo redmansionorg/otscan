@@ -14,6 +14,7 @@ import Assets from './pages/Assets';
 import Persons from './pages/Persons';
 import Conflicts from './pages/Conflicts';
 import Verify from './pages/Verify';
+import About from './pages/About';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { refetchInterval: 15000, retry: 1 } },
@@ -50,8 +51,8 @@ function TopNavBar() {
   ];
 
   const publishItems: MenuProps['items'] = [
-    { key: 'assets', label: 'Asset (AUID)', onClick: () => { navigate('/publish/assets'); setDrawerOpen(false); } },
-    { key: 'persons', label: 'Person (PUID)', onClick: () => { navigate('/publish/persons'); setDrawerOpen(false); } },
+    { key: 'assets', label: 'Assets', onClick: () => { navigate('/publish/assets'); setDrawerOpen(false); } },
+    { key: 'persons', label: 'Proprietor', onClick: () => { navigate('/publish/persons'); setDrawerOpen(false); } },
     { key: 'conflicts', label: 'Conflicts', onClick: () => { navigate('/conflicts'); setDrawerOpen(false); } },
   ];
 
@@ -134,12 +135,14 @@ function AppLayout() {
           <Route path="/publish/assets" element={<Assets />} />
           <Route path="/publish/persons" element={<Persons />} />
           <Route path="/verify" element={<Verify />} />
+          <Route path="/about" element={<About />} />
         </Routes>
       </div>
       <footer className="otscan-footer">
-        OTScan &copy; 2024 RMC &nbsp;|&nbsp;
+        Redmansion &middot; OTScan &copy; 2025 &nbsp;|&nbsp;
         <Link to="/nodes">Nodes</Link>
         <Link to="/verify">Verify</Link>
+        <Link to="/about">About</Link>
       </footer>
     </div>
   );
