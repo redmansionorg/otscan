@@ -27,7 +27,8 @@ type BatchListResponse struct {
 }
 
 // ListBatches returns paginated batches from DB, falls back to RPC.
-func (s *BatchService) ListBatches(ctx context.Context, status string, page, pageSize int) (*BatchListResponse, error) {
+// filter can be: "non-empty", "empty", "pending".
+func (s *BatchService) ListBatches(ctx context.Context, status string, page, pageSize int, filter ...string) (*BatchListResponse, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -36,12 +37,18 @@ func (s *BatchService) ListBatches(ctx context.Context, status string, page, pag
 	}
 	offset := (page - 1) * pageSize
 
-	batches, total, err := s.db.ListBatches(ctx, status, pageSize, offset)
-	if err == nil && total > 0 {
+	f := ""
+	if len(filter) > 0 {
+		f = filter[0]
+	}
+
+	batches, total, err := s.db.ListBatches(ctx, status, pageSize, offset, filter...)
+	if err == nil && (total > 0 || f != "") {
+		// When a filter is active, 0 results is a valid outcome (e.g. no empty batches).
 		return &BatchListResponse{Batches: batches, Total: total, Page: page, PageSize: pageSize}, nil
 	}
 
-	// RPC fallback
+	// RPC fallback (only for unfiltered queries)
 	return s.listBatchesFromRPC(ctx, status)
 }
 

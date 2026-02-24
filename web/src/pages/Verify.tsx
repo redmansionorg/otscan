@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, Input, Result, Descriptions, Tag, Alert, Typography, Collapse, Steps } from 'antd';
 import {
   SafetyCertificateOutlined, CheckCircleOutlined, CloseCircleOutlined,
   LinkOutlined, LockOutlined, AuditOutlined, ThunderboltOutlined,
   CloudOutlined, PlusOutlined, ArrowRightOutlined,
 } from '@ant-design/icons';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { verifyRUID, type VerifyData, type ParsedOTSProof } from '../api/client';
 import dayjs from 'dayjs';
 
@@ -132,18 +132,21 @@ function OTSProofPathView({ parsed }: { parsed: ParsedOTSProof }) {
 // ─── Main Component ──────────────────────────────────────────────
 
 export default function Verify() {
+  const [searchParams] = useSearchParams();
   const [ruid, setRuid] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<VerifyData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const handleVerify = async () => {
-    if (!ruid.trim()) return;
+  const handleVerify = async (value?: string) => {
+    const v = (value || ruid).trim();
+    if (!v) return;
+    setRuid(v);
     setLoading(true);
     setError(null);
     setResult(null);
     try {
-      const data = await verifyRUID(ruid.trim());
+      const data = await verifyRUID(v);
       setResult(data);
     } catch (err) {
       setError(String(err));
@@ -152,8 +155,17 @@ export default function Verify() {
     }
   };
 
+  // Auto-verify from URL query param
+  useEffect(() => {
+    const ruidParam = searchParams.get('ruid');
+    if (ruidParam && ruidParam.startsWith('0x')) {
+      setRuid(ruidParam);
+      handleVerify(ruidParam);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
-    <div style={{ maxWidth: 850, margin: '0 auto' }}>
+    <div className="page-container" style={{ maxWidth: 850 }}>
       <Card title="RUID Verification" style={{ marginBottom: 16 }}>
         <p style={{ color: '#666', marginBottom: 16 }}>
           Verify that a RUID is included in an anchored batch with Bitcoin confirmation.
@@ -164,7 +176,7 @@ export default function Verify() {
           enterButton={<><SafetyCertificateOutlined /> Verify</>}
           value={ruid}
           onChange={(e) => setRuid(e.target.value)}
-          onSearch={handleVerify}
+          onSearch={() => handleVerify()}
           loading={loading}
         />
       </Card>

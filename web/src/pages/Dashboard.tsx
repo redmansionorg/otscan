@@ -1,52 +1,30 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Card, Col, Row, Statistic, Table, Tag, Badge, Spin, Alert, Select, Typography } from 'antd';
-import { CheckCircleOutlined, CloseCircleOutlined, SyncOutlined, ClockCircleOutlined, WifiOutlined } from '@ant-design/icons';
-import { Link } from 'react-router-dom';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { fetchDashboard, fetchNodeHistory, fetchClaimStats, type DashboardData, type BatchSummary, type NodeHistoryPoint, type ClaimStats } from '../api/client';
+import { Input, Tag, Badge, Spin, Alert, Row, Col } from 'antd';
+import { SearchOutlined, BlockOutlined, TeamOutlined, SafetyCertificateOutlined, DatabaseOutlined, FileTextOutlined } from '@ant-design/icons';
+import { Link, useNavigate } from 'react-router-dom';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { fetchDashboard, fetchClaimStats, fetchBatches, type DashboardData, type BatchSummary, type ClaimRecord, type ClaimStats, type BatchListResponse } from '../api/client';
 import { useWebSocket, type WSEvent } from '../api/websocket';
-import dayjs from 'dayjs';
 
-const { Text } = Typography;
-
-const statusColor: Record<string, string> = {
-  pending: 'blue', submitted: 'orange', confirmed: 'green', anchored: 'gold', failed: 'red',
+const statusClass: Record<string, string> = {
+  pending: 'status-pending', submitted: 'status-submitted', confirmed: 'status-confirmed',
+  anchored: 'status-anchored', failed: 'status-failed',
 };
 
 const shortAddr = (addr?: string) => addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : '-';
 
-const batchColumns = [
-  {
-    title: 'ID', dataIndex: 'onChainID', key: 'id', width: 60,
-    render: (v: number, r: BatchSummary) => <Link to={`/batches/${r.batchID}`}>{v || '-'}</Link>,
-  },
-  { title: 'Batch ID', dataIndex: 'batchID', key: 'batchID', ellipsis: true, width: 180 },
-  {
-    title: 'Block Range', key: 'range', width: 140,
-    render: (_: unknown, r: BatchSummary) => `${r.startBlock} - ${r.endBlock}`,
-  },
-  { title: 'RUIDs', dataIndex: 'ruidCount', key: 'ruidCount', width: 70 },
-  {
-    title: 'Status', dataIndex: 'status', key: 'status', width: 100,
-    render: (s: string) => <Tag color={statusColor[s] || 'default'}>{s}</Tag>,
-  },
-  {
-    title: 'Anchor Node', dataIndex: 'anchoredBy', key: 'anchoredBy', width: 130,
-    render: (v: string) => v ? <span title={v}>{shortAddr(v)}</span> : '-',
-  },
-];
-
-const NODE_COLORS = ['#1890ff', '#52c41a', '#fa8c16', '#eb2f96', '#722ed1'];
-
 export default function Dashboard() {
   const queryClient = useQueryClient();
-  const [selectedNode, setSelectedNode] = useState<string>('');
+  const navigate = useNavigate();
+  const [searchValue, setSearchValue] = useState('');
 
-  // WebSocket for live updates
+  // WebSocket for live updates - refresh all dashboard queries
   const handleWSEvent = useCallback((event: WSEvent) => {
-    if (event.type === 'node_status' || event.type === 'batch_update') {
+    if (event.type === 'node_status' || event.type === 'batch_update' || event.type === 'claim_sync') {
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['claimStats'] });
+      queryClient.invalidateQueries({ queryKey: ['trendBatches'] });
     }
   }, [queryClient]);
 
@@ -57,153 +35,228 @@ export default function Dashboard() {
     queryFn: fetchDashboard,
   });
 
-  // Fetch node history for trend chart
-  const historyNode = selectedNode || (data?.nodes?.[0]?.name ?? '');
-  const { data: history } = useQuery<NodeHistoryPoint[]>({
-    queryKey: ['nodeHistory', historyNode],
-    queryFn: () => fetchNodeHistory(historyNode, 180),
-    enabled: !!historyNode,
-    refetchInterval: 30000,
-  });
-
   const { data: claimStats } = useQuery<ClaimStats>({
     queryKey: ['claimStats'],
     queryFn: fetchClaimStats,
+  });
+
+  // Fetch last 16 batches for RUID Trends chart
+  const { data: trendBatches } = useQuery<BatchListResponse>({
+    queryKey: ['trendBatches'],
+    queryFn: () => fetchBatches({ page: '1', pageSize: '16' }),
   });
 
   if (isLoading) return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
   if (error) return <Alert type="error" message="Failed to load dashboard" description={String(error)} />;
   if (!data) return null;
 
-  // Process history data for chart
-  const chartData = (history || []).map(h => ({
-    time: dayjs(h.recordedAt).format('HH:mm:ss'),
-    blockNumber: h.blockNumber,
-    pendingCount: h.pendingCount,
-    status: h.status === 'healthy' ? 1 : 0,
-  }));
+  // Smart search handler
+  const handleSearch = (value: string) => {
+    const v = value.trim();
+    if (!v) return;
+    if (/^0x[0-9a-fA-F]{64}$/.test(v)) {
+      navigate(`/verify?ruid=${v}`);
+    } else if (/^0x[0-9a-fA-F]{40}$/.test(v)) {
+      navigate(`/claims?claimant=${v}`);
+    } else if (/^batch-/.test(v) || /^\d+$/.test(v)) {
+      navigate(`/batches/${v}`);
+    } else {
+      navigate(`/claims?search=${v}`);
+    }
+  };
+
+  // RUID Trends chart data (reverse to show oldest→newest)
+  const trendData = (trendBatches?.batches || [])
+    .slice()
+    .reverse()
+    .map(b => ({
+      name: b.onChainID ? `#${b.onChainID}` : b.batchID.slice(0, 8),
+      ruids: b.ruidCount,
+    }));
+
+  const recentBatches = (data.recentBatches || []).slice(0, 5);
+  const recentClaims = (data.recentClaims || []).slice(0, 5);
 
   return (
     <div>
-      {/* Live connection indicator */}
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-        <Badge status={connected ? 'success' : 'error'} />
-        <Text type="secondary" style={{ fontSize: 12 }}>
-          <WifiOutlined /> {connected ? 'Live updates connected' : 'Reconnecting...'}
-        </Text>
+      {/* Hero Section */}
+      <div className="otscan-hero">
+        <h1>OTScan - RMC Copyright Timestamp Explorer</h1>
+        <div className="subtitle">Blockchain-based copyright timestamping and verification</div>
+        <div className="search-box">
+          <Input.Search
+            placeholder="Search by RUID / Batch ID / AUID / Address"
+            enterButton={<SearchOutlined />}
+            size="large"
+            value={searchValue}
+            onChange={e => setSearchValue(e.target.value)}
+            onSearch={handleSearch}
+            style={{ borderRadius: 8 }}
+          />
+        </div>
+        <div className="chain-stats">
+          <span><BlockOutlined /> Block: {data.latestBlock?.toLocaleString()}</span>
+          <span>|</span>
+          <span><TeamOutlined /> Validators: {data.nodesHealthy}/{data.nodeCount}</span>
+          <span>|</span>
+          <span><SafetyCertificateOutlined /> BTC Anchored: {data.anchoredBatches ?? (data.totalBatches - data.pendingBatches)}</span>
+          <span>|</span>
+          <span>
+            <Badge status={connected ? 'success' : 'error'} />
+            {connected ? 'Live' : 'Reconnecting'}
+          </span>
+        </div>
       </div>
 
-      <Row gutter={[16, 16]}>
-        <Col xs={12} sm={6}>
-          <Card>
-            <Statistic
-              title="Nodes"
-              value={data.nodesHealthy}
-              suffix={`/ ${data.nodeCount}`}
-              valueStyle={{ color: data.nodesHealthy === data.nodeCount ? '#3f8600' : '#cf1322' }}
-              prefix={data.nodesHealthy === data.nodeCount ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} sm={6}>
-          <Card><Statistic title="Latest Block" value={data.latestBlock} prefix={<SyncOutlined />} /></Card>
-        </Col>
-        <Col xs={12} sm={6}>
-          <Card><Statistic title="Total Batches" value={data.totalBatches} prefix={<ClockCircleOutlined />} /></Card>
-        </Col>
-        <Col xs={12} sm={6}>
-          <Card><Statistic title="Total Claims" value={data.totalClaims} /></Card>
-        </Col>
-      </Row>
-
-      {claimStats && (
-        <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-          <Col xs={12} sm={6}>
-            <Card><Statistic title="Published Claims" value={claimStats.publishedCount} /></Card>
+      <div className="otscan-content">
+        {/* Statistics Row */}
+        <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
+          <Col xs={12} sm={12} md={6}>
+            <div className="stat-card">
+              <div className="stat-label">Total Batches</div>
+              <div className="stat-value">{data.totalBatches}</div>
+              <div className="stat-sub">
+                {data.anchoredBatches ?? (data.totalBatches - data.pendingBatches)} anchored, {data.pendingBatches} pending
+              </div>
+            </div>
           </Col>
-          <Col xs={12} sm={6}>
-            <Card><Statistic title="Unique AUIDs" value={claimStats.uniqueAuids} /></Card>
+          <Col xs={12} sm={12} md={6}>
+            <div className="stat-card">
+              <div className="stat-label">Total Claims</div>
+              <div className="stat-value">{data.totalClaims?.toLocaleString()}</div>
+              <div className="stat-sub">
+                {claimStats ? `${claimStats.publishedCount.toLocaleString()} published` : 'loading...'}
+              </div>
+            </div>
           </Col>
-          <Col xs={12} sm={6}>
-            <Card><Statistic title="Unique PUIDs" value={claimStats.uniquePuids} /></Card>
+          <Col xs={12} sm={12} md={6}>
+            <div className="stat-card">
+              <div className="stat-label">Published / Total</div>
+              <div className="stat-value">
+                {claimStats ? `${claimStats.publishedCount.toLocaleString()} / ${data.totalClaims?.toLocaleString()}` : '-'}
+              </div>
+              <div className="stat-sub">
+                {claimStats ? `${claimStats.uniqueAuids} AUIDs, ${claimStats.uniquePuids} PUIDs` : ''}
+              </div>
+            </div>
           </Col>
-          <Col xs={12} sm={6}>
-            <Card>
-              <Statistic
-                title="Conflict AUIDs"
-                value={claimStats.conflictAuids}
-                valueStyle={claimStats.conflictAuids > 0 ? { color: '#cf1322' } : undefined}
-              />
-            </Card>
+          <Col xs={12} sm={12} md={6}>
+            <div className="trends-chart">
+              <div className="chart-title">RUID Trends</div>
+              <div className="chart-subtitle">
+                Last {trendData.length} batches
+              </div>
+              {trendData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={80}>
+                  <AreaChart data={trendData}>
+                    <defs>
+                      <linearGradient id="ruidGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3498db" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#3498db" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="name" hide />
+                    <YAxis hide />
+                    <Tooltip formatter={(v: number | undefined) => [`${(v ?? 0).toLocaleString()} RUIDs`, 'Count']} />
+                    <Area type="monotone" dataKey="ruids" stroke="#3498db" fill="url(#ruidGradient)" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ color: '#ccc', fontSize: 12, paddingTop: 16 }}>No batch data yet</div>
+              )}
+            </div>
           </Col>
         </Row>
-      )}
 
-      {/* Trend Chart */}
-      <Card
-        title="Node Trends"
-        style={{ marginTop: 16 }}
-        extra={
-          <Select
-            value={historyNode}
-            onChange={setSelectedNode}
-            style={{ width: 120 }}
-            size="small"
-          >
-            {data.nodes.map(n => (
-              <Select.Option key={n.name} value={n.name}>{n.name}</Select.Option>
-            ))}
-          </Select>
-        }
-      >
-        {chartData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="time" fontSize={11} interval="preserveStartEnd" />
-              <YAxis yAxisId="block" orientation="left" fontSize={11} />
-              <YAxis yAxisId="pending" orientation="right" fontSize={11} />
-              <Tooltip />
-              <Legend />
-              <Line yAxisId="block" type="monotone" dataKey="blockNumber" name="Block Height" stroke="#1890ff" dot={false} strokeWidth={2} />
-              <Line yAxisId="pending" type="monotone" dataKey="pendingCount" name="Pending Count" stroke="#fa8c16" dot={false} strokeWidth={2} />
-            </LineChart>
-          </ResponsiveContainer>
-        ) : (
-          <Text type="secondary">Collecting data... Trend chart will appear after a few polling cycles.</Text>
-        )}
-      </Card>
-
-      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <Col xs={24} lg={14}>
-          <Card title="Recent Batches" extra={<Link to="/batches">View All</Link>}>
-            <Table
-              dataSource={data.recentBatches || []}
-              columns={batchColumns}
-              rowKey="batchID"
-              pagination={false}
-              size="small"
-            />
-          </Card>
-        </Col>
-        <Col xs={24} lg={10}>
-          <Card title="Node Status" extra={<Link to="/nodes">Details</Link>}>
-            {data.nodes.map((n, i) => (
-              <div key={n.name} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
-                <span>
-                  <Badge color={NODE_COLORS[i % NODE_COLORS.length]} />
-                  <Link to={`/nodes`}>{n.name}</Link>
-                  {' '}
-                  <Tag color={n.status === 'healthy' ? 'green' : n.status === 'degraded' ? 'orange' : 'red'} style={{ fontSize: 11 }}>{n.status}</Tag>
-                </span>
-                <span style={{ color: '#999', fontSize: 13 }}>
-                  Block {n.blockNumber} | Pending {n.pendingCount}
-                </span>
+        {/* Dual Column: Latest Batches + Latest Claims */}
+        <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
+          <Col xs={24} lg={12}>
+            <div className="section-card">
+              <div className="card-header">
+                <span><DatabaseOutlined /> Latest Batches</span>
+                <Link to="/batches">View All &rarr;</Link>
               </div>
-            ))}
-          </Card>
-        </Col>
-      </Row>
+              <div className="card-body">
+                {recentBatches.map((b: BatchSummary) => (
+                  <div className="latest-item" key={b.batchID}>
+                    <div className="item-icon">
+                      <DatabaseOutlined />
+                    </div>
+                    <div className="item-info">
+                      <div className="item-title">
+                        <Link to={`/batches/${b.batchID}`}>
+                          {b.onChainID ? `#${b.onChainID}` : ''} {b.batchID.length > 24 ? b.batchID.slice(0, 24) + '...' : b.batchID}
+                        </Link>
+                      </div>
+                      <div className="item-meta">
+                        Blk {b.startBlock}-{b.endBlock} | {b.ruidCount.toLocaleString()} RUIDs
+                        {b.anchoredBy ? ` | ${shortAddr(b.anchoredBy)}` : ''}
+                      </div>
+                    </div>
+                    <div className="item-right">
+                      <span className={`status-tag ${statusClass[b.status] || ''}`}>{b.status}</span>
+                    </div>
+                  </div>
+                ))}
+                {recentBatches.length === 0 && (
+                  <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>No batches yet</div>
+                )}
+              </div>
+            </div>
+          </Col>
+
+          <Col xs={24} lg={12}>
+            <div className="section-card">
+              <div className="card-header">
+                <span><FileTextOutlined /> Latest Claims</span>
+                <Link to="/claims">View All &rarr;</Link>
+              </div>
+              <div className="card-body">
+                {recentClaims.length > 0 ? recentClaims.map((c: ClaimRecord) => (
+                  <div className="latest-item" key={c.ruid}>
+                    <div className="item-icon">
+                      <FileTextOutlined />
+                    </div>
+                    <div className="item-info">
+                      <div className="item-title">
+                        <Link to={`/verify?ruid=${c.ruid}`} title={c.ruid}>
+                          {shortAddr(c.ruid)}
+                        </Link>
+                      </div>
+                      <div className="item-meta">
+                        Claimant {shortAddr(c.claimant)} | Block {c.submitBlock}
+                      </div>
+                    </div>
+                    <div className="item-right">
+                      <span className={`status-tag ${c.published ? 'status-confirmed' : 'status-pending'}`}>
+                        {c.published ? 'Published' : 'Pending'}
+                      </span>
+                    </div>
+                  </div>
+                )) : (
+                  <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>No claims yet</div>
+                )}
+              </div>
+            </div>
+          </Col>
+        </Row>
+
+        {/* Node Status Bar */}
+        <div className="node-status-bar">
+          <span style={{ fontWeight: 600, fontSize: 13, color: '#21325b', marginRight: 8 }}>
+            <TeamOutlined /> Nodes:
+          </span>
+          {data.nodes.map(n => (
+            <span className="node-item" key={n.name}>
+              <span className={`node-dot ${n.status}`} />
+              <Link to="/nodes" className="explorer-link">{n.name}</Link>
+              <Tag color={n.status === 'healthy' ? 'green' : n.status === 'degraded' ? 'orange' : 'red'} style={{ fontSize: 11, marginLeft: 2 }}>
+                #{n.blockNumber}
+              </Tag>
+            </span>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

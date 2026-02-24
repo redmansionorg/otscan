@@ -38,7 +38,7 @@ func (idx *Indexer) syncBatches(ctx context.Context) {
 	}
 
 	synced := 0
-	// Sync all batches by on-chain ID
+	// Sync all batches by on-chain ID (metadata only, no RUID sync here)
 	for i := 1; i <= totalBatches; i++ {
 		batch, err := idx.rpcClient.GetBatch(syncCtx, url, fmt.Sprintf("%d", i))
 		if err != nil {
@@ -86,11 +86,6 @@ func (idx *Indexer) syncBatches(ctx context.Context) {
 				log.Printf("[indexer] batch %s status changed: %s -> %s", batch.BatchID, prevStatus, batch.Status)
 			}
 		}
-
-		// Sync RUIDs for this batch if it has any
-		if batch.RUIDCount > 0 {
-			idx.syncBatchRUIDs(syncCtx, url, batch.BatchID, batch.RUIDCount)
-		}
 	}
 
 	// Also sync pending batches
@@ -98,12 +93,12 @@ func (idx *Indexer) syncBatches(ctx context.Context) {
 	if err == nil {
 		for _, p := range pending {
 			rec := &store.BatchRecord{
-				BatchID:   p.BatchID,
-				OnChainID: int64(p.OnChainID),
+				BatchID:    p.BatchID,
+				OnChainID:  int64(p.OnChainID),
 				StartBlock: p.StartBlock,
-				EndBlock:  p.EndBlock,
-				RUIDCount: int(p.RUIDCount),
-				Status:    p.Status,
+				EndBlock:   p.EndBlock,
+				RUIDCount:  int(p.RUIDCount),
+				Status:     p.Status,
 			}
 			idx.db.UpsertBatch(syncCtx, rec)
 		}
@@ -112,27 +107,70 @@ func (idx *Indexer) syncBatches(ctx context.Context) {
 	if synced > 0 {
 		log.Printf("[indexer] batch sync: synced %d/%d batches", synced, totalBatches)
 	}
+
+	// Sync RUIDs in a separate pass with its own timeout.
+	// Process one incomplete batch per cycle to avoid overwhelming RPC.
+	idx.syncIncompleteRUIDs(ctx, url)
 }
 
-func (idx *Indexer) syncBatchRUIDs(ctx context.Context, url, batchID string, count uint32) {
-	const pageSize uint32 = 100
-	var allRUIDs []string
+// syncIncompleteRUIDs finds the first batch with incomplete RUID sync
+// and continues fetching from where it left off. Uses its own 120s timeout.
+func (idx *Indexer) syncIncompleteRUIDs(ctx context.Context, url string) {
+	ruidCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
+	defer cancel()
 
-	for offset := uint32(0); offset < count; offset += pageSize {
+	// Find batches where synced RUID count < expected count
+	batches, err := idx.db.ListBatchesWithIncompleteRUIDs(ruidCtx)
+	if err != nil {
+		log.Printf("[indexer] ruid sync: failed to list incomplete batches: %v", err)
+		return
+	}
+
+	for _, b := range batches {
+		if ruidCtx.Err() != nil {
+			break
+		}
+
+		synced := idx.syncBatchRUIDs(ruidCtx, url, b.BatchID, uint32(b.RUIDCount), b.SyncedRUIDs)
+		if synced > 0 {
+			log.Printf("[indexer] ruid sync: batch %s synced %d RUIDs (%d/%d total)",
+				b.BatchID, synced, b.SyncedRUIDs+synced, b.RUIDCount)
+		}
+	}
+}
+
+// syncBatchRUIDs fetches RUIDs for a batch starting from alreadySynced offset.
+// Returns the number of newly synced RUIDs.
+func (idx *Indexer) syncBatchRUIDs(ctx context.Context, url, batchID string, expectedCount uint32, alreadySynced int) int {
+	const pageSize uint32 = 1000
+	totalNew := 0
+
+	for offset := uint32(alreadySynced); offset < expectedCount; offset += pageSize {
+		if ctx.Err() != nil {
+			break
+		}
+
 		limit := pageSize
-		if offset+limit > count {
-			limit = count - offset
+		if offset+limit > expectedCount {
+			limit = expectedCount - offset
 		}
 		result, err := idx.rpcClient.GetRUIDs(ctx, url, batchID, offset, limit)
 		if err != nil {
+			log.Printf("[indexer] ruid sync: batch %s offset %d: %v", batchID, offset, err)
 			break
 		}
-		allRUIDs = append(allRUIDs, result.RUIDs...)
+
+		if len(result.RUIDs) == 0 {
+			break
+		}
+
+		// Insert this page immediately (incremental progress)
+		if err := idx.db.BulkInsertBatchRUIDs(ctx, batchID, result.RUIDs); err != nil {
+			log.Printf("[indexer] ruid sync: batch %s insert at offset %d: %v", batchID, offset, err)
+			break
+		}
+		totalNew += len(result.RUIDs)
 	}
 
-	if len(allRUIDs) > 0 {
-		if err := idx.db.UpsertBatchRUIDs(ctx, batchID, allRUIDs); err != nil {
-			log.Printf("[indexer] failed to sync RUIDs for batch %s: %v", batchID, err)
-		}
-	}
+	return totalNew
 }

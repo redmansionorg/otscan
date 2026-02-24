@@ -87,6 +87,200 @@ func (db *DB) GetClaim(ctx context.Context, ruid string) (*ClaimRecord, error) {
 	return c, nil
 }
 
+// ListClaims returns paginated claims with optional filter.
+// filter: "anchored" (batch status=anchored), "non-anchored" (batch status!=anchored),
+//         "published" (published=true), "" (all, sorted by submit_block desc).
+func (db *DB) ListClaims(ctx context.Context, filter string, offset, limit int) ([]ClaimRecord, int, error) {
+	var total int
+	selectCols := `SELECT c.ruid, COALESCE(c.claimant,''), c.submit_block, c.submit_time, c.published,
+		COALESCE(c.auid,''), COALESCE(c.puid,''), c.publish_block, c.publish_time, COALESCE(c.batch_id,'')`
+
+	switch filter {
+	case "anchored":
+		db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM claims c
+			JOIN batches b ON c.batch_id = b.batch_id WHERE b.status = 'anchored'`).Scan(&total)
+		rows, err := db.Pool.Query(ctx, selectCols+`
+			FROM claims c JOIN batches b ON c.batch_id = b.batch_id
+			WHERE b.status = 'anchored'
+			ORDER BY c.submit_block DESC LIMIT $1 OFFSET $2`, limit, offset)
+		if err != nil {
+			return nil, 0, err
+		}
+		defer rows.Close()
+		return scanClaims(rows, total)
+	case "non-anchored":
+		// Claims NOT in an anchored batch: either no batch, empty batch_id, or batch not anchored.
+		db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM claims c
+			LEFT JOIN batches b ON c.batch_id = b.batch_id AND c.batch_id != ''
+			WHERE b.batch_id IS NULL OR b.status != 'anchored'`).Scan(&total)
+		rows, err := db.Pool.Query(ctx, selectCols+`
+			FROM claims c LEFT JOIN batches b ON c.batch_id = b.batch_id AND c.batch_id != ''
+			WHERE b.batch_id IS NULL OR b.status != 'anchored'
+			ORDER BY c.submit_block DESC LIMIT $1 OFFSET $2`, limit, offset)
+		if err != nil {
+			return nil, 0, err
+		}
+		defer rows.Close()
+		return scanClaims(rows, total)
+	case "published":
+		db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM claims WHERE published = true`).Scan(&total)
+		rows, err := db.Pool.Query(ctx, selectCols+`
+			FROM claims c WHERE c.published = true
+			ORDER BY c.submit_block DESC LIMIT $1 OFFSET $2`, limit, offset)
+		if err != nil {
+			return nil, 0, err
+		}
+		defer rows.Close()
+		return scanClaims(rows, total)
+	default:
+		db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM claims`).Scan(&total)
+		rows, err := db.Pool.Query(ctx, selectCols+`
+			FROM claims c ORDER BY c.submit_block DESC LIMIT $1 OFFSET $2`, limit, offset)
+		if err != nil {
+			return nil, 0, err
+		}
+		defer rows.Close()
+		return scanClaims(rows, total)
+	}
+}
+
+func scanClaims(rows interface{ Next() bool; Scan(...interface{}) error }, total int) ([]ClaimRecord, int, error) {
+	var results []ClaimRecord
+	for rows.Next() {
+		var c ClaimRecord
+		rows.Scan(&c.RUID, &c.Claimant, &c.SubmitBlock, &c.SubmitTime, &c.Published,
+			&c.AUID, &c.PUID, &c.PublishBlock, &c.PublishTime, &c.BatchID)
+		results = append(results, c)
+	}
+	return results, total, nil
+}
+
+// BackfillClaimBatchIDs updates claims with empty batch_id by matching
+// submit_block against batch block ranges.
+func (db *DB) BackfillClaimBatchIDs(ctx context.Context) (int64, error) {
+	tag, err := db.Pool.Exec(ctx, `
+		UPDATE claims c
+		SET batch_id = b.batch_id
+		FROM batches b
+		WHERE (c.batch_id IS NULL OR c.batch_id = '')
+		  AND c.submit_block BETWEEN b.start_block AND b.end_block
+	`)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
+// ClaimantSummary represents a unique claimant with claim count.
+type ClaimantSummary struct {
+	Claimant   string `json:"claimant"`
+	ClaimCount int    `json:"claimCount"`
+	Published  int    `json:"publishedCount"`
+	LatestBlock uint64 `json:"latestBlock"`
+}
+
+// ListClaimants returns unique claimant addresses with counts.
+func (db *DB) ListClaimants(ctx context.Context, offset, limit int) ([]ClaimantSummary, int, error) {
+	var total int
+	db.Pool.QueryRow(ctx, `SELECT COUNT(DISTINCT claimant) FROM claims WHERE claimant IS NOT NULL AND claimant != ''`).Scan(&total)
+
+	rows, err := db.Pool.Query(ctx, `
+		SELECT claimant,
+			COUNT(*) AS claim_count,
+			COUNT(*) FILTER (WHERE published = true) AS published_count,
+			MAX(submit_block) AS latest_block
+		FROM claims
+		WHERE claimant IS NOT NULL AND claimant != ''
+		GROUP BY claimant
+		ORDER BY claim_count DESC
+		LIMIT $1 OFFSET $2
+	`, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var results []ClaimantSummary
+	for rows.Next() {
+		var s ClaimantSummary
+		rows.Scan(&s.Claimant, &s.ClaimCount, &s.Published, &s.LatestBlock)
+		results = append(results, s)
+	}
+	return results, total, nil
+}
+
+// AssetSummary represents a unique AUID with claim count.
+type AssetSummary struct {
+	AUID       string `json:"auid"`
+	ClaimCount int    `json:"claimCount"`
+	PUIDCount  int    `json:"puidCount"`
+}
+
+// ListAssets returns unique published AUIDs with claim counts.
+func (db *DB) ListAssets(ctx context.Context, offset, limit int) ([]AssetSummary, int, error) {
+	var total int
+	db.Pool.QueryRow(ctx, `SELECT COUNT(DISTINCT auid) FROM claims WHERE published = true AND auid IS NOT NULL AND auid != ''`).Scan(&total)
+
+	rows, err := db.Pool.Query(ctx, `
+		SELECT auid,
+			COUNT(*) AS claim_count,
+			COUNT(DISTINCT puid) AS puid_count
+		FROM claims
+		WHERE published = true AND auid IS NOT NULL AND auid != ''
+		GROUP BY auid
+		ORDER BY claim_count DESC
+		LIMIT $1 OFFSET $2
+	`, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var results []AssetSummary
+	for rows.Next() {
+		var s AssetSummary
+		rows.Scan(&s.AUID, &s.ClaimCount, &s.PUIDCount)
+		results = append(results, s)
+	}
+	return results, total, nil
+}
+
+// PersonSummary represents a unique PUID with asset count.
+type PersonSummary struct {
+	PUID       string `json:"puid"`
+	AssetCount int    `json:"assetCount"`
+	ClaimCount int    `json:"claimCount"`
+}
+
+// ListPersons returns unique PUIDs with associated asset counts.
+func (db *DB) ListPersons(ctx context.Context, offset, limit int) ([]PersonSummary, int, error) {
+	var total int
+	db.Pool.QueryRow(ctx, `SELECT COUNT(DISTINCT puid) FROM claims WHERE published = true AND puid IS NOT NULL AND puid != ''`).Scan(&total)
+
+	rows, err := db.Pool.Query(ctx, `
+		SELECT puid,
+			COUNT(DISTINCT auid) AS asset_count,
+			COUNT(*) AS claim_count
+		FROM claims
+		WHERE published = true AND puid IS NOT NULL AND puid != ''
+		GROUP BY puid
+		ORDER BY asset_count DESC
+		LIMIT $1 OFFSET $2
+	`, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var results []PersonSummary
+	for rows.Next() {
+		var s PersonSummary
+		rows.Scan(&s.PUID, &s.AssetCount, &s.ClaimCount)
+		results = append(results, s)
+	}
+	return results, total, nil
+}
+
 // GetClaimCount returns total number of claims.
 func (db *DB) GetClaimCount(ctx context.Context) (int, error) {
 	var count int

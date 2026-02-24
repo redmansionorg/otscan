@@ -39,9 +39,11 @@ export interface DashboardData {
   latestBlock: number;
   totalBatches: number;
   pendingBatches: number;
+  anchoredBatches: number;
   totalClaims: number;
   nodes: NodeStatus[];
   recentBatches?: BatchSummary[];
+  recentClaims?: ClaimRecord[];
 }
 
 export interface BatchSummary {
@@ -248,3 +250,54 @@ export interface NodeHistoryPoint {
 
 export const fetchNodeHistory = (name: string, limit = 360): Promise<NodeHistoryPoint[]> =>
   api.get(`/nodes/${name}/history`, { params: { limit } });
+
+// Phase 2: New list types and API functions
+
+export interface ClaimantSummary {
+  claimant: string;
+  claimCount: number;
+  publishedCount: number;
+  latestBlock: number;
+}
+
+export interface ClaimantListData {
+  items: ClaimantSummary[] | null;
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+export interface AssetSummary {
+  auid: string;
+  claimCount: number;
+  puidCount: number;
+}
+
+export interface AssetListData {
+  items: AssetSummary[] | null;
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+export interface PersonSummary {
+  puid: string;
+  assetCount: number;
+  claimCount: number;
+}
+
+export interface PersonListData {
+  items: PersonSummary[] | null;
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+export const fetchClaimants = (offset = 0, limit = 20): Promise<ClaimantListData> =>
+  api.get('/claimants', { params: { offset, limit } });
+
+export const fetchAssets = (offset = 0, limit = 20): Promise<AssetListData> =>
+  api.get('/assets', { params: { offset, limit } });
+
+export const fetchPersons = (offset = 0, limit = 20): Promise<PersonListData> =>
+  api.get('/persons', { params: { offset, limit } });

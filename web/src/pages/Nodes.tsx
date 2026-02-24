@@ -182,6 +182,7 @@ export default function Nodes() {
   if (error) return <Alert type="error" message={String(error)} />;
 
   return (
+    <div className="page-container">
     <Card title="Validator Nodes">
       <Table
         dataSource={data || []}
@@ -215,5 +216,6 @@ export default function Nodes() {
         }}
       />
     </Card>
+    </div>
   );
 }

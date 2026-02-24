@@ -1,0 +1,435 @@
+/* OTScan Global Styles - Etherscan-inspired blockchain explorer */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #f8f9fa;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Top Navigation Bar */
+.otscan-navbar {
+  background: #fff;
+  border-bottom: 2px solid #3498db;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  height: 56px;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.otscan-navbar .logo {
+  font-size: 20px;
+  font-weight: 700;
+  color: #21325b;
+  letter-spacing: 1px;
+  margin-right: 32px;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.otscan-navbar .logo span {
+  color: #3498db;
+}
+
+.otscan-nav-menu {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+.otscan-nav-menu .ant-dropdown-trigger,
+.otscan-nav-menu > a {
+  padding: 6px 14px;
+  color: #333;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.otscan-nav-menu .ant-dropdown-trigger:hover,
+.otscan-nav-menu > a:hover {
+  background: #f0f5ff;
+  color: #1e88e5;
+}
+
+/* Hero Section */
+.otscan-hero {
+  background: linear-gradient(135deg, #0784c3 0%, #21325b 100%);
+  padding: 40px 24px 36px;
+  text-align: center;
+  color: #fff;
+}
+
+.otscan-hero h1 {
+  font-size: 22px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  letter-spacing: 0.5px;
+}
+
+.otscan-hero .subtitle {
+  font-size: 13px;
+  opacity: 0.8;
+  margin-bottom: 20px;
+}
+
+.otscan-hero .search-box {
+  max-width: 680px;
+  margin: 0 auto 16px;
+}
+
+.otscan-hero .chain-stats {
+  font-size: 13px;
+  opacity: 0.85;
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.otscan-hero .chain-stats span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Main Content Container */
+.otscan-content {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 20px 24px 40px;
+}
+
+/* Stat Cards */
+.stat-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  border: 1px solid #eee;
+  height: 100%;
+}
+
+.stat-card .stat-label {
+  font-size: 12px;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.stat-card .stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #21325b;
+}
+
+.stat-card .stat-sub {
+  font-size: 12px;
+  color: #999;
+  margin-top: 4px;
+}
+
+/* Section Cards */
+.section-card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  border: 1px solid #eee;
+  overflow: hidden;
+}
+
+.section-card .card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #21325b;
+}
+
+.section-card .card-header a {
+  font-size: 13px;
+  font-weight: 400;
+  color: #1e88e5;
+  text-decoration: none;
+}
+
+.section-card .card-header a:hover {
+  text-decoration: underline;
+}
+
+.section-card .card-body {
+  padding: 0;
+}
+
+/* Latest Items List */
+.latest-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 12px 20px;
+  border-bottom: 1px solid #f5f5f5;
+  gap: 12px;
+  transition: background 0.15s;
+}
+
+.latest-item:last-child {
+  border-bottom: none;
+}
+
+.latest-item:hover {
+  background: #fafbfc;
+}
+
+.latest-item .item-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: #f0f5ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #3498db;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.latest-item .item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.latest-item .item-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e88e5;
+  margin-bottom: 2px;
+}
+
+.latest-item .item-title a {
+  color: #1e88e5;
+  text-decoration: none;
+}
+
+.latest-item .item-title a:hover {
+  text-decoration: underline;
+}
+
+.latest-item .item-meta {
+  font-size: 12px;
+  color: #999;
+}
+
+.latest-item .item-right {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.latest-item .item-right .status-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.latest-item .item-right .time-ago {
+  font-size: 11px;
+  color: #bbb;
+  margin-top: 4px;
+}
+
+/* Status Tag Colors */
+.status-pending { background: #e6f4ff; color: #1677ff; }
+.status-submitted { background: #fff7e6; color: #fa8c16; }
+.status-confirmed { background: #f6ffed; color: #52c41a; }
+.status-anchored { background: #fffbe6; color: #d48806; }
+.status-failed { background: #fff2f0; color: #ff4d4f; }
+
+/* Node Status Bar */
+.node-status-bar {
+  background: #fff;
+  border-radius: 10px;
+  padding: 14px 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  border: 1px solid #eee;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+}
+
+.node-status-bar .node-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #333;
+}
+
+.node-status-bar .node-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.node-status-bar .node-dot.healthy { background: #52c41a; }
+.node-status-bar .node-dot.degraded { background: #fa8c16; }
+.node-status-bar .node-dot.unhealthy { background: #ff4d4f; }
+
+/* Footer */
+.otscan-footer {
+  background: #21325b;
+  color: rgba(255,255,255,0.7);
+  text-align: center;
+  padding: 24px;
+  font-size: 13px;
+  margin-top: 40px;
+}
+
+.otscan-footer a {
+  color: rgba(255,255,255,0.85);
+  text-decoration: none;
+  margin: 0 12px;
+}
+
+.otscan-footer a:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+
+/* Page-level Cards (for Batches, Claims, etc.) */
+.page-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.page-card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  border: 1px solid #eee;
+  padding: 20px;
+}
+
+/* RUID Trends Mini Chart */
+.trends-chart {
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  border: 1px solid #eee;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.trends-chart .chart-title {
+  font-size: 12px;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.trends-chart .chart-subtitle {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+/* Responsive: Desktop/Mobile nav toggle */
+.otscan-nav-mobile {
+  display: none;
+  margin-left: auto;
+}
+
+@media (max-width: 768px) {
+  .otscan-nav-desktop {
+    display: none !important;
+  }
+
+  .otscan-nav-mobile {
+    display: flex;
+    align-items: center;
+  }
+
+  .otscan-navbar {
+    padding: 0 12px;
+  }
+
+  .otscan-hero {
+    padding: 24px 16px 20px;
+  }
+
+  .otscan-hero h1 {
+    font-size: 18px;
+  }
+
+  .otscan-content {
+    padding: 12px 12px 24px;
+  }
+
+  .page-container {
+    padding: 12px;
+  }
+
+  .node-status-bar {
+    gap: 10px;
+    padding: 10px 14px;
+  }
+
+  .latest-item .item-icon {
+    display: none;
+  }
+
+  .stat-card .stat-value {
+    font-size: 18px;
+  }
+}
+
+/* Override Ant Design table in explorer context */
+.explorer-table .ant-table {
+  border-radius: 0;
+}
+
+.explorer-table .ant-table-thead > tr > th {
+  background: #fafbfc;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: #666;
+  font-weight: 600;
+}
+
+/* Link styling */
+a.explorer-link {
+  color: #1e88e5;
+  text-decoration: none;
+}
+
+a.explorer-link:hover {
+  color: #1565c0;
+  text-decoration: underline;
+}

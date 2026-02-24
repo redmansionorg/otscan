@@ -7,19 +7,22 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/workshop1/otscan/internal/rpc"
+	"github.com/workshop1/otscan/internal/store"
 )
 
 type DashboardResponse struct {
-	ChainID        int                    `json:"chainId"`
-	ChainName      string                 `json:"chainName"`
-	NodeCount      int                    `json:"nodeCount"`
-	NodesHealthy   int                    `json:"nodesHealthy"`
-	LatestBlock    uint64                 `json:"latestBlock"`
-	TotalBatches   int                    `json:"totalBatches"`
-	PendingBatches int                    `json:"pendingBatches"`
-	TotalClaims    int                    `json:"totalClaims"`
-	Nodes          []map[string]interface{} `json:"nodes"`
-	RecentBatches  []*rpc.BatchSummary    `json:"recentBatches,omitempty"`
+	ChainID         int                      `json:"chainId"`
+	ChainName       string                   `json:"chainName"`
+	NodeCount       int                      `json:"nodeCount"`
+	NodesHealthy    int                      `json:"nodesHealthy"`
+	LatestBlock     uint64                   `json:"latestBlock"`
+	TotalBatches    int                      `json:"totalBatches"`
+	PendingBatches  int                      `json:"pendingBatches"`
+	AnchoredBatches int                      `json:"anchoredBatches"`
+	TotalClaims     int                      `json:"totalClaims"`
+	Nodes           []map[string]interface{} `json:"nodes"`
+	RecentBatches   []*rpc.BatchSummary      `json:"recentBatches,omitempty"`
+	RecentClaims    []store.ClaimRecord      `json:"recentClaims,omitempty"`
 }
 
 func (s *Server) handleDashboard(c *gin.Context) {
@@ -87,32 +90,42 @@ func (s *Server) handleDashboard(c *gin.Context) {
 	totalClaims, _ := s.db.GetClaimCount(claimsCtx)
 	claimsCancel()
 
+	// Get anchored batch count
+	anchoredBatches := totalBatches - pendingBatches
+
 	// Get recent batches from DB
 	var recentBatches []*rpc.BatchSummary
 	if result, err := s.batchSvc.ListBatches(ctx, "", 1, 10); err == nil {
 		for _, b := range result.Batches {
 			recentBatches = append(recentBatches, &rpc.BatchSummary{
-				BatchID:    b.BatchID,
-				OnChainID:  uint64(b.OnChainID),
-				StartBlock: b.StartBlock,
-				EndBlock:   b.EndBlock,
-				RUIDCount:  uint32(b.RUIDCount),
-				Status:     b.Status,
+				BatchID:     b.BatchID,
+				OnChainID:   uint64(b.OnChainID),
+				StartBlock:  b.StartBlock,
+				EndBlock:    b.EndBlock,
+				RUIDCount:   uint32(b.RUIDCount),
+				Status:      b.Status,
+				AnchoredBy:  b.AnchoredBy,
+				AnchorBlock: b.AnchorBlock,
 			})
 		}
 	}
 
+	// Get recent claims from DB (latest 5)
+	recentClaims, _, _ := s.db.ListClaims(ctx, "", 0, 5)
+
 	okJSON(c, DashboardResponse{
-		ChainID:        s.cfg.Chain.ID,
-		ChainName:      s.cfg.Chain.Name,
-		NodeCount:      len(s.cfg.Nodes),
-		NodesHealthy:   healthy,
-		LatestBlock:    maxBlock,
-		TotalBatches:   totalBatches,
-		PendingBatches: pendingBatches,
-		TotalClaims:    totalClaims,
-		Nodes:          nodeItems,
-		RecentBatches:  recentBatches,
+		ChainID:         s.cfg.Chain.ID,
+		ChainName:       s.cfg.Chain.Name,
+		NodeCount:       len(s.cfg.Nodes),
+		NodesHealthy:    healthy,
+		LatestBlock:     maxBlock,
+		TotalBatches:    totalBatches,
+		PendingBatches:  pendingBatches,
+		AnchoredBatches: anchoredBatches,
+		TotalClaims:     totalClaims,
+		Nodes:           nodeItems,
+		RecentBatches:   recentBatches,
+		RecentClaims:    recentClaims,
 	})
 }
 

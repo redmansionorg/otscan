@@ -14,10 +14,11 @@ func (s *Server) handleListBatches(c *gin.Context) {
 	defer cancel()
 
 	status := c.Query("status")
+	filter := c.Query("filter")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
 
-	result, err := s.batchSvc.ListBatches(ctx, status, page, pageSize)
+	result, err := s.batchSvc.ListBatches(ctx, status, page, pageSize, filter)
 	if err != nil {
 		errJSON(c, http.StatusBadGateway, err.Error())
 		return

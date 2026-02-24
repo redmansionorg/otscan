@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -83,31 +84,48 @@ func (db *DB) GetPendingBatchCount(ctx context.Context) (int, error) {
 	return count, err
 }
 
-// ListBatches returns batches with optional status filter, ordered by on_chain_id desc.
-func (db *DB) ListBatches(ctx context.Context, status string, limit, offset int) ([]BatchRecord, int, error) {
+// ListBatches returns batches with optional status or filter, ordered by on_chain_id desc.
+// filter can be: "non-empty" (ruidCount > 0), "empty" (ruidCount == 0), "pending" (status != 'anchored').
+// status filters by exact status value.
+func (db *DB) ListBatches(ctx context.Context, status string, limit, offset int, filter ...string) ([]BatchRecord, int, error) {
 	var total int
-	countQuery := "SELECT COUNT(*) FROM batches"
-	listQuery := `SELECT batch_id, COALESCE(on_chain_id, 0), start_block, end_block, root_hash,
+	selectCols := `SELECT batch_id, COALESCE(on_chain_id, 0), start_block, end_block, root_hash,
 		COALESCE(ots_digest, ''), ruid_count, COALESCE(trigger_type, ''), status,
 		COALESCE(btc_tx_id, ''), COALESCE(btc_block_height, 0), COALESCE(btc_timestamp, 0),
 		COALESCE(created_at, 0), updated_at,
 		COALESCE(anchored_by, ''), COALESCE(anchor_block, 0)
 		FROM batches`
 
-	if status != "" {
-		countQuery += " WHERE status = $1"
-		listQuery += " WHERE status = $1 ORDER BY on_chain_id DESC NULLS LAST LIMIT $2 OFFSET $3"
-		db.Pool.QueryRow(ctx, countQuery, status).Scan(&total)
-		rows, err := db.Pool.Query(ctx, listQuery, status, limit, offset)
-		if err != nil {
-			return nil, 0, err
+	// Determine WHERE clause from filter or status
+	var where string
+	f := ""
+	if len(filter) > 0 {
+		f = filter[0]
+	}
+	switch f {
+	case "non-empty":
+		where = " WHERE ruid_count > 0"
+	case "empty":
+		where = " WHERE ruid_count = 0"
+	case "pending":
+		where = " WHERE status != 'anchored'"
+	default:
+		if status != "" {
+			countQuery := "SELECT COUNT(*) FROM batches WHERE status = $1"
+			listQuery := selectCols + " WHERE status = $1 ORDER BY on_chain_id DESC NULLS LAST LIMIT $2 OFFSET $3"
+			db.Pool.QueryRow(ctx, countQuery, status).Scan(&total)
+			rows, err := db.Pool.Query(ctx, listQuery, status, limit, offset)
+			if err != nil {
+				return nil, 0, err
+			}
+			defer rows.Close()
+			return scanBatches(rows, total)
 		}
-		defer rows.Close()
-		return scanBatches(rows, total)
 	}
 
+	countQuery := "SELECT COUNT(*) FROM batches" + where
+	listQuery := selectCols + where + " ORDER BY on_chain_id DESC NULLS LAST LIMIT $1 OFFSET $2"
 	db.Pool.QueryRow(ctx, countQuery).Scan(&total)
-	listQuery += " ORDER BY on_chain_id DESC NULLS LAST LIMIT $1 OFFSET $2"
 	rows, err := db.Pool.Query(ctx, listQuery, limit, offset)
 	if err != nil {
 		return nil, 0, err
@@ -140,6 +158,75 @@ func (db *DB) UpsertBatchRUIDs(ctx context.Context, batchID string, ruids []stri
 			ON CONFLICT (batch_id, ruid) DO NOTHING
 		`, batchID, ruid)
 		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// BatchWithRUIDProgress represents a batch and its RUID sync progress.
+type BatchWithRUIDProgress struct {
+	BatchID     string
+	RUIDCount   int
+	SyncedRUIDs int
+}
+
+// ListBatchesWithIncompleteRUIDs returns batches where synced RUID count < expected.
+func (db *DB) ListBatchesWithIncompleteRUIDs(ctx context.Context) ([]BatchWithRUIDProgress, error) {
+	rows, err := db.Pool.Query(ctx, `
+		SELECT b.batch_id, b.ruid_count, COALESCE(r.synced, 0) as synced_ruids
+		FROM batches b
+		LEFT JOIN (
+			SELECT batch_id, COUNT(*) as synced
+			FROM batch_ruids
+			GROUP BY batch_id
+		) r ON b.batch_id = r.batch_id
+		WHERE b.ruid_count > 0 AND COALESCE(r.synced, 0) < b.ruid_count
+		ORDER BY b.on_chain_id ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []BatchWithRUIDProgress
+	for rows.Next() {
+		var b BatchWithRUIDProgress
+		if err := rows.Scan(&b.BatchID, &b.RUIDCount, &b.SyncedRUIDs); err != nil {
+			return nil, err
+		}
+		result = append(result, b)
+	}
+	return result, nil
+}
+
+// BulkInsertBatchRUIDs inserts a batch of RUIDs efficiently using a single query.
+func (db *DB) BulkInsertBatchRUIDs(ctx context.Context, batchID string, ruids []string) error {
+	if len(ruids) == 0 {
+		return nil
+	}
+
+	// Build a bulk INSERT with VALUES list
+	const batchSize = 500
+	for i := 0; i < len(ruids); i += batchSize {
+		end := i + batchSize
+		if end > len(ruids) {
+			end = len(ruids)
+		}
+		chunk := ruids[i:end]
+
+		query := "INSERT INTO batch_ruids (batch_id, ruid) VALUES "
+		args := make([]interface{}, 0, len(chunk)*2)
+		for j, ruid := range chunk {
+			if j > 0 {
+				query += ","
+			}
+			query += fmt.Sprintf("($%d,$%d)", j*2+1, j*2+2)
+			args = append(args, batchID, ruid)
+		}
+		query += " ON CONFLICT (batch_id, ruid) DO NOTHING"
+
+		if _, err := db.Pool.Exec(ctx, query, args...); err != nil {
 			return err
 		}
 	}

@@ -121,6 +121,14 @@ func (idx *Indexer) syncClaims(ctx context.Context) {
 			"lastBlock": latestBlock,
 		})
 	}
+
+	// Backfill batch_id for claims that don't have one yet,
+	// by matching submit_block against batch block ranges.
+	if updated, err := idx.db.BackfillClaimBatchIDs(syncCtx); err != nil {
+		log.Printf("[indexer] claim sync: failed to backfill batch_id: %v", err)
+	} else if updated > 0 {
+		log.Printf("[indexer] claim sync: backfilled batch_id for %d claims", updated)
+	}
 }
 
 func (idx *Indexer) fetchClaimEvents(ctx context.Context, url string, fromBlock, toBlock uint64) ([]*store.ClaimRecord, []*store.ClaimRecord, error) {

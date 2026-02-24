@@ -21,6 +21,28 @@ func (s *Server) handleSearchClaims(c *gin.Context) {
 		limit = 20
 	}
 
+	// Check for filter-based listing (Phase 2)
+	if filter := c.Query("filter"); filter != "" {
+		result, err := s.claimSvc.ListClaims(ctx, filter, offset, limit)
+		if err != nil {
+			errJSON(c, http.StatusInternalServerError, err.Error())
+			return
+		}
+		okJSON(c, result)
+		return
+	}
+
+	// Sort=latest means list all claims by submit_block desc
+	if sort := c.Query("sort"); sort == "latest" {
+		result, err := s.claimSvc.ListClaims(ctx, "", offset, limit)
+		if err != nil {
+			errJSON(c, http.StatusInternalServerError, err.Error())
+			return
+		}
+		okJSON(c, result)
+		return
+	}
+
 	if claimant := c.Query("claimant"); claimant != "" {
 		result, err := s.claimSvc.SearchClaims(ctx, "claimant", claimant, offset, limit)
 		if err != nil {
@@ -49,7 +71,13 @@ func (s *Server) handleSearchClaims(c *gin.Context) {
 		return
 	}
 
-	errJSON(c, http.StatusBadRequest, "must provide claimant, auid, or puid query parameter")
+	// Default: list all claims (newest first)
+	result, err := s.claimSvc.ListClaims(ctx, "", offset, limit)
+	if err != nil {
+		errJSON(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	okJSON(c, result)
 }
 
 func (s *Server) handleGetClaim(c *gin.Context) {
@@ -111,4 +139,73 @@ func (s *Server) handleClaimStats(c *gin.Context) {
 		return
 	}
 	okJSON(c, stats)
+}
+
+func (s *Server) handleListClaimants(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+
+	claimants, total, err := s.claimSvc.ListClaimants(ctx, offset, limit)
+	if err != nil {
+		errJSON(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	okJSON(c, map[string]interface{}{
+		"items":  claimants,
+		"total":  total,
+		"offset": offset,
+		"limit":  limit,
+	})
+}
+
+func (s *Server) handleListAssets(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+
+	assets, total, err := s.claimSvc.ListAssets(ctx, offset, limit)
+	if err != nil {
+		errJSON(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	okJSON(c, map[string]interface{}{
+		"items":  assets,
+		"total":  total,
+		"offset": offset,
+		"limit":  limit,
+	})
+}
+
+func (s *Server) handleListPersons(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+
+	persons, total, err := s.claimSvc.ListPersons(ctx, offset, limit)
+	if err != nil {
+		errJSON(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	okJSON(c, map[string]interface{}{
+		"items":  persons,
+		"total":  total,
+		"offset": offset,
+		"limit":  limit,
+	})
 }
