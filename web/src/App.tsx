@@ -76,28 +76,30 @@ function TopNavBar() {
   return (
     <>
       <nav className="otscan-navbar">
-        <Link to="/" className="logo">
-          <span>OT</span>Scan
-        </Link>
-        {/* Desktop menu */}
-        <div className="otscan-nav-menu otscan-nav-desktop">
-          <Link to="/" style={isActive('/') && location.pathname === '/' ? { color: '#1e88e5' } : undefined}>
-            Home
+        <div className="otscan-navbar-inner">
+          <Link to="/" className="logo">
+            <span>OT</span>Scan
           </Link>
-          <NavDropdown label="Batches" items={batchItems} />
-          <NavDropdown label="Claims" items={claimItems} />
-          <NavDropdown label="Publish" items={publishItems} />
-          <Link to="/verify" style={isActive('/verify') ? { color: '#1e88e5' } : undefined}>
-            Verify
-          </Link>
-          <NavDropdown label="More" items={moreItems} />
-        </div>
-        {/* Mobile hamburger */}
-        <div className="otscan-nav-mobile">
-          <MenuOutlined
-            style={{ fontSize: 20, cursor: 'pointer', color: '#333' }}
-            onClick={() => setDrawerOpen(true)}
-          />
+          {/* Desktop menu */}
+          <div className="otscan-nav-menu otscan-nav-desktop">
+            <Link to="/" style={isActive('/') && location.pathname === '/' ? { color: '#1e88e5' } : undefined}>
+              Home
+            </Link>
+            <NavDropdown label="Batches" items={batchItems} />
+            <NavDropdown label="Claims" items={claimItems} />
+            <NavDropdown label="Publish" items={publishItems} />
+            <Link to="/verify" style={isActive('/verify') ? { color: '#1e88e5' } : undefined}>
+              Verify
+            </Link>
+            <NavDropdown label="More" items={moreItems} />
+          </div>
+          {/* Mobile hamburger */}
+          <div className="otscan-nav-mobile">
+            <MenuOutlined
+              style={{ fontSize: 20, cursor: 'pointer', color: '#333' }}
+              onClick={() => setDrawerOpen(true)}
+            />
+          </div>
         </div>
       </nav>
       <Drawer

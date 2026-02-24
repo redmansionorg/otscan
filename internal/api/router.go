@@ -61,6 +61,7 @@ func NewServer(cfg *config.Config, rpcClient *rpc.Client, db *store.DB, c *cache
 		v1.GET("/assets", s.handleListAssets)
 		v1.GET("/persons", s.handleListPersons)
 		v1.GET("/conflicts", s.handleListConflicts)
+		v1.GET("/search", s.handleLookupHash)
 		v1.GET("/stats/claims", s.handleClaimStats)
 		v1.POST("/verify", s.handleVerify)
 		v1.GET("/proof/:batchId", s.handleGetProof)

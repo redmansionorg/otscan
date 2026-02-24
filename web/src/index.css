@@ -18,11 +18,19 @@ body {
   padding: 0 24px;
   display: flex;
   align-items: center;
+  justify-content: center;
   height: 56px;
   position: sticky;
   top: 0;
   z-index: 1000;
   box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.otscan-navbar-inner {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 1280px;
 }
 
 .otscan-navbar .logo {

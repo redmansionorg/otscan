@@ -1,10 +1,10 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Input, Tag, Badge, Spin, Alert, Row, Col } from 'antd';
+import { Input, Tag, Badge, Spin, Alert, Row, Col, message } from 'antd';
 import { SearchOutlined, BlockOutlined, TeamOutlined, SafetyCertificateOutlined, DatabaseOutlined, FileTextOutlined } from '@ant-design/icons';
 import { Link, useNavigate } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { fetchDashboard, fetchClaimStats, fetchBatches, type DashboardData, type BatchSummary, type ClaimRecord, type ClaimStats, type BatchListResponse } from '../api/client';
+import { fetchDashboard, fetchClaimStats, fetchBatches, lookupHash, type DashboardData, type BatchSummary, type ClaimRecord, type ClaimStats, type BatchListResponse } from '../api/client';
 import { useWebSocket, type WSEvent } from '../api/websocket';
 
 const statusClass: Record<string, string> = {
@@ -18,6 +18,7 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [searchValue, setSearchValue] = useState('');
+  const [searching, setSearching] = useState(false);
 
   // WebSocket for live updates - refresh all dashboard queries
   const handleWSEvent = useCallback((event: WSEvent) => {
@@ -51,18 +52,38 @@ export default function Dashboard() {
   if (!data) return null;
 
   // Smart search handler
-  const handleSearch = (value: string) => {
+  const handleSearch = async (value: string) => {
     const v = value.trim();
     if (!v) return;
-    if (/^0x[0-9a-fA-F]{64}$/.test(v)) {
-      navigate(`/verify?ruid=${v}`);
-    } else if (/^0x[0-9a-fA-F]{40}$/.test(v)) {
+    // Address format (0x + 40 hex) → claimant search
+    if (/^0x[0-9a-fA-F]{40}$/.test(v)) {
       navigate(`/claims?claimant=${v}`);
-    } else if (/^batch-/.test(v) || /^\d+$/.test(v)) {
-      navigate(`/batches/${v}`);
-    } else {
-      navigate(`/claims?search=${v}`);
+      return;
     }
+    // Batch ID format
+    if (/^batch-/.test(v) || /^\d+$/.test(v)) {
+      navigate(`/batches/${v}`);
+      return;
+    }
+    // Hash format (0x + 64 hex) → lookup RUID/AUID/PUID via backend
+    if (/^0x[0-9a-fA-F]{64}$/.test(v)) {
+      setSearching(true);
+      try {
+        const result = await lookupHash(v);
+        switch (result.type) {
+          case 'ruid': navigate(`/verify?ruid=${v}`); break;
+          case 'auid': navigate(`/claims?auid=${v}`); break;
+          case 'puid': navigate(`/claims?puid=${v}`); break;
+          default: message.warning('No matching RUID, AUID, or PUID found');
+        }
+      } catch {
+        message.error('Search failed');
+      } finally {
+        setSearching(false);
+      }
+      return;
+    }
+    message.warning('Unrecognized format. Enter a RUID/AUID/PUID (0x + 64 hex), address (0x + 40 hex), or Batch ID.');
   };
 
   // RUID Trends chart data (reverse to show oldest→newest)
@@ -85,12 +106,13 @@ export default function Dashboard() {
         <div className="subtitle">Blockchain-based copyright timestamping and verification</div>
         <div className="search-box">
           <Input.Search
-            placeholder="Search by RUID / Batch ID / AUID / Address"
+            placeholder="Search by RUID / AUID / PUID / Batch ID / Address"
             enterButton={<SearchOutlined />}
             size="large"
             value={searchValue}
             onChange={e => setSearchValue(e.target.value)}
             onSearch={handleSearch}
+            loading={searching}
             style={{ borderRadius: 8 }}
           />
         </div>

@@ -209,3 +209,21 @@ func (s *Server) handleListPersons(c *gin.Context) {
 		"limit":  limit,
 	})
 }
+
+// handleLookupHash checks if a 0x+64hex value is a known RUID, AUID, or PUID.
+func (s *Server) handleLookupHash(c *gin.Context) {
+	q := c.Query("q")
+	if q == "" {
+		errJSON(c, http.StatusBadRequest, "q parameter required")
+		return
+	}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
+	defer cancel()
+
+	matchType, err := s.db.LookupHash(ctx, q)
+	if err != nil {
+		errJSON(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	okJSON(c, map[string]string{"type": matchType, "query": q})
+}

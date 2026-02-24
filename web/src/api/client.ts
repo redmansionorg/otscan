@@ -218,6 +218,9 @@ export const fetchConfig = (): Promise<ChainConfig> => api.get('/config');
 export const fetchConflicts = (offset = 0, limit = 20): Promise<ConflictListData> => api.get('/conflicts', { params: { offset, limit } });
 export const fetchClaimStats = (): Promise<ClaimStats> => api.get('/stats/claims');
 
+export interface LookupResult { type: 'ruid' | 'auid' | 'puid' | 'none'; query: string; }
+export const lookupHash = (q: string): Promise<LookupResult> => api.get('/search', { params: { q } });
+
 export interface CalendarBatchInfo {
   batchID: string;
   status: string;

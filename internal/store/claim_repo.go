@@ -87,6 +87,37 @@ func (db *DB) GetClaim(ctx context.Context, ruid string) (*ClaimRecord, error) {
 	return c, nil
 }
 
+// LookupHash checks if a 0x+64hex value exists as a RUID, AUID, or PUID.
+// Returns the type ("ruid", "auid", "puid") and the matching value, or "none".
+func (db *DB) LookupHash(ctx context.Context, hash string) (string, error) {
+	var exists bool
+	// Check RUID first (most common search)
+	err := db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM claims WHERE ruid = $1)`, hash).Scan(&exists)
+	if err != nil {
+		return "none", err
+	}
+	if exists {
+		return "ruid", nil
+	}
+	// Check AUID
+	err = db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM claims WHERE auid = $1 LIMIT 1)`, hash).Scan(&exists)
+	if err != nil {
+		return "none", err
+	}
+	if exists {
+		return "auid", nil
+	}
+	// Check PUID
+	err = db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM claims WHERE puid = $1 LIMIT 1)`, hash).Scan(&exists)
+	if err != nil {
+		return "none", err
+	}
+	if exists {
+		return "puid", nil
+	}
+	return "none", nil
+}
+
 // ListClaims returns paginated claims with optional filter.
 // filter: "anchored" (batch status=anchored), "non-anchored" (batch status!=anchored),
 //         "published" (published=true), "" (all, sorted by submit_block desc).
